@@ -14,4 +14,11 @@ export class AppController {
     getHealth(): { status: string } {
         return { status: 'OK' };
     }
+    @Get('dev')
+    dev() {
+    return {
+        status: 'auto-deploy-working',
+        branch: 'develop'
+    };
+    }
 }
