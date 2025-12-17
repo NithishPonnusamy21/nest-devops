@@ -3,7 +3,6 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { getDbSecret } from './config/db-secret';
-import { User } from './users/user.repository';
 
 @Module({
   imports: [
@@ -23,8 +22,6 @@ import { User } from './users/user.repository';
         };
       },
     }),
-
-    TypeOrmModule.forFeature([User]),
   ],
   controllers: [AppController],
   providers: [AppService],
