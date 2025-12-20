@@ -16,26 +16,38 @@ let AppController = class AppController {
     constructor(appService) {
         this.appService = appService;
     }
-    getHello() {
-        return this.appService.getHello();
-    }
     getHealth() {
         return { status: 'OK' };
     }
+    dev() {
+        return {
+            status: 'auto-deploy-working',
+            branch: 'develop'
+        };
+    }
+    async checkDb() {
+        return this.appService.checkDb();
+    }
 };
 exports.AppController = AppController;
-__decorate([
-    (0, common_1.Get)(),
-    __metadata("design:type", Function),
-    __metadata("design:paramtypes", []),
-    __metadata("design:returntype", Object)
-], AppController.prototype, "getHello", null);
 __decorate([
     (0, common_1.Get)('health'),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", []),
     __metadata("design:returntype", Object)
 ], AppController.prototype, "getHealth", null);
+__decorate([
+    (0, common_1.Get)('dev'),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", void 0)
+], AppController.prototype, "dev", null);
+__decorate([
+    (0, common_1.Get)('checkdb'),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", Promise)
+], AppController.prototype, "checkDb", null);
 exports.AppController = AppController = __decorate([
     (0, common_1.Controller)(),
     __metadata("design:paramtypes", [app_service_1.AppService])

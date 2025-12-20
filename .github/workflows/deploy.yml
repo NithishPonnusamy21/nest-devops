@@ -18,9 +18,42 @@ jobs:
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            cd /home/ubuntu/nest-devops/nestjs-simple-backend
-            git pull origin main
+            set -e
+
+            APP_DIR=/home/ubuntu/nest-devops/nestjs-simple-backend
+            cd $APP_DIR
+
+            echo "▶ Fetching latest code"
+            git fetch origin
+            git checkout ${{ github.ref_name }}
+            git pull origin ${{ github.ref_name }}
+
+            echo "▶ Backing up current build"
+            if [ -d dist ]; then
+              rm -rf dist_prev
+              mv dist dist_prev
+            fi
+
+            echo "▶ Installing dependencies"
             npm install
+
+            echo "▶ Building application"
             npm run build
+
+            echo "▶ Restarting application"
             pm2 restart nest-backend
 
+            echo "▶ Waiting for app to boot"
+            sleep 5
+
+            echo "▶ Running health check"
+            if curl -f http://localhost:3000/health; then
+              echo "✅ Health check passed"
+              rm -rf dist_prev
+            else
+              echo "❌ Health check failed — rolling back"
+              rm -rf dist
+              mv dist_prev dist
+              pm2 restart nest-backend
+              exit 1
+            fi

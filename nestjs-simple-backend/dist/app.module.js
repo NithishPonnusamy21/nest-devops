@@ -8,14 +8,32 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.AppModule = void 0;
 const common_1 = require("@nestjs/common");
+const typeorm_1 = require("@nestjs/typeorm");
 const app_controller_1 = require("./app.controller");
 const app_service_1 = require("./app.service");
+const db_secret_1 = require("./config/db-secret");
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
 exports.AppModule = AppModule = __decorate([
     (0, common_1.Module)({
-        imports: [],
+        imports: [
+            typeorm_1.TypeOrmModule.forRootAsync({
+                useFactory: async () => {
+                    const secret = await (0, db_secret_1.getDbSecret)();
+                    return {
+                        type: 'mysql',
+                        host: secret.host,
+                        port: Number(secret.port),
+                        username: secret.username,
+                        password: secret.password,
+                        database: 'test',
+                        autoLoadEntities: true,
+                        synchronize: false,
+                    };
+                },
+            }),
+        ],
         controllers: [app_controller_1.AppController],
         providers: [app_service_1.AppService],
     })
