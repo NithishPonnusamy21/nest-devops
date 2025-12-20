@@ -25,8 +25,8 @@ jobs:
 
             echo "▶ Fetching latest code"
             git fetch origin
-            git checkout ${{ github.ref_name }}
-            git pull origin ${{ github.ref_name }}
+            git reset --hard origin/${{ github.ref_name }}
+            git clean -fd
 
             echo "▶ Backing up current build"
             if [ -d dist ]; then
