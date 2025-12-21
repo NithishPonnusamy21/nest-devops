@@ -1,11 +1,17 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { ConfigModule } from '@nestjs/config';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { getDbSecret } from './config/db-secret';
 
 @Module({
   imports: [
+    // 👇 THIS IS THE KEY LINE
+    ConfigModule.forRoot({
+      isGlobal: true,
+    }),
+
     TypeOrmModule.forRootAsync({
       useFactory: async () => {
         const secret = await getDbSecret();
@@ -16,7 +22,7 @@ import { getDbSecret } from './config/db-secret';
           port: Number(secret.port),
           username: secret.username,
           password: secret.password,
-          database: 'test', 
+          database: secret.database, // 👈 FIXED
           autoLoadEntities: true,
           synchronize: false,
         };
