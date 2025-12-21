@@ -1,4 +1,4 @@
-name: Deploy NestJS Backend
+name: Build and Push Docker Image to ECR
 
 on:
   push:
@@ -7,55 +7,33 @@ on:
   workflow_dispatch:
 
 jobs:
-  deploy:
+  build-and-push:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Deploy to EC2 via SSH
-        uses: appleboy/ssh-action@v1.0.0
+      - name: Checkout source code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
         with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          script: |
-            set -e
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
 
-            APP_DIR=/home/ubuntu/nest-devops/nestjs-simple-backend
-            cd $APP_DIR
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
 
-            echo "▶ Fetching latest code"
-            git fetch origin
-            git reset --hard origin/${{ github.ref_name }}
-            git clean -fd
+      - name: Build Docker image
+        run: |
+          docker build -t nest-backend:latest .
 
-            echo "▶ Backing up current build"
-            if [ -d dist ]; then
-              rm -rf dist_prev
-              mv dist dist_prev
-            fi
+      - name: Tag Docker image
+        run: |
+          docker tag nest-backend:latest \
+          ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/nest-backend:latest
 
-            echo "▶ Installing dependencies"
-            npm install
-
-            echo "▶ Building application"
-            npm run build
-
-            echo "▶ Restarting application"
-            pm2 restart nest-backend
-
-            echo "▶ Waiting for app to be ready"
-            for i in {1..10}; do
-              if curl -f http://localhost:3000/health; then
-                echo "✅ Health check passed"
-                rm -rf dist_prev
-                exit 0
-              fi
-              echo "⏳ App not ready yet... retrying ($i/10)"
-              sleep 5
-            done
-
-            echo "❌ Health check failed — rolling back"
-            rm -rf dist
-            mv dist_prev dist
-            pm2 restart nest-backend
-            exit 1
+      - name: Push Docker image to ECR
+        run: |
+          docker push \
+          ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/nest-backend:latest
