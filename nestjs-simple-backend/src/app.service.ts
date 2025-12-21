@@ -11,7 +11,7 @@ export class AppService {
 
   // EXISTING
   getHello(): string {
-    return 'Hello From nithish,hi how are you, Have a good day';
+    return 'Hello From nithish,hi how are you, Have a good day :-))';
   }
 
   // USED BY /db-check
