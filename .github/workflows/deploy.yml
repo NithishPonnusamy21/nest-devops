@@ -30,8 +30,11 @@ jobs:
 
       - name: Tag Docker image
         run: |
-          docker tag nest-backend:latest ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/nest-backend:latest
+          ECR_IMAGE="${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/nest-backend:latest"
+          echo "Tagging image as $ECR_IMAGE"
+          docker tag nest-backend:latest "$ECR_IMAGE"
 
       - name: Push Docker image to ECR
         run: |
-          docker push ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/nest-backend:latest
+          ECR_IMAGE="${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/nest-backend:latest"
+          docker push "$ECR_IMAGE"
