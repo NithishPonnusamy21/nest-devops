@@ -1,13 +1,18 @@
-name: Build and Push Docker Image to ECR (Develop)
+name: Deploy Nest Backend to EC2 (Docker + ECR)
 
 on:
   push:
     branches:
-      - develop
-  workflow_dispatch:
+      - main   # change if needed
+
+env:
+  AWS_REGION: ap-south-1
+  ECR_REPOSITORY: nest-backend
+  CONTAINER_NAME: nest-backend
+  APP_PORT: 3000
 
 jobs:
-  build-and-push:
+  deploy:
     runs-on: ubuntu-latest
 
     steps:
@@ -15,61 +20,58 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2️⃣ DEBUG — show repo structure (SAFE)
-      - name: Debug repo structure
-        run: |
-          echo "Repo root:"
-          pwd
-          echo "----------------"
-          ls -la
-          echo "----------------"
-          echo "nestjs-simple-backend folder:"
-          ls -la nestjs-simple-backend
-
-      # 3️⃣ Configure AWS credentials
+      # 2️⃣ Configure AWS credentials
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION }}
+          aws-region: ${{ env.AWS_REGION }}
 
-      # 4️⃣ DEBUG — verify AWS auth (SAFE)
-      - name: Debug AWS identity
-        run: |
-          aws sts get-caller-identity
-
-      # 5️⃣ Login to Amazon ECR
+      # 3️⃣ Login to Amazon ECR
       - name: Login to Amazon ECR
+        id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      # 6️⃣ DEBUG — construct ECR image name (SAFE)
-      - name: Debug ECR image name
+      # 4️⃣ Build, tag, and push image
+      - name: Build and push Docker image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
         run: |
-          ECR_IMAGE="${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/nest-backend:latest"
-          echo "ECR image name constructed (masked by GitHub):"
-          echo "$ECR_IMAGE"
+          echo "Building image with tag: $IMAGE_TAG"
 
-      # 7️⃣ Build Docker image
-      - name: Build Docker image
-        run: |
-          docker build \
-            -t nest-backend:latest \
-            ./nestjs-simple-backend
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
 
-      # 8️⃣ Tag Docker image
-      - name: Tag Docker image
-        run: |
-          ECR_IMAGE="${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/nest-backend:latest"
-          docker tag nest-backend:latest "$ECR_IMAGE"
+          echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
 
-      # 9️⃣ Push Docker image to ECR
-      - name: Push Docker image to ECR
-        run: |
-          ECR_IMAGE="${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/nest-backend:latest"
-          docker push "$ECR_IMAGE"
+      # 5️⃣ Deploy to EC2 via SSH
+      - name: Deploy to EC2
+        uses: appleboy/ssh-action@v1.0.0
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ env.IMAGE_TAG }}
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            set -e
 
-      # 🔟 SUCCESS MESSAGE
-      - name: Done
-        run: |
-          echo "✅ Docker image successfully pushed to ECR"
+            echo "Pulling new image"
+            docker pull $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+
+            echo "Stopping old container (if exists)"
+            docker stop $CONTAINER_NAME || true
+            docker rm $CONTAINER_NAME || true
+
+            echo "Starting new container"
+            docker run -d \
+              --name $CONTAINER_NAME \
+              --restart always \
+              -p $APP_PORT:$APP_PORT \
+              --env-file /home/ubuntu/.env \
+              $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+
+            echo "Deployment successful"
