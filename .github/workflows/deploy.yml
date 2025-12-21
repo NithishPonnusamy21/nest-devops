@@ -1,4 +1,4 @@
-name: Build and Push Docker Image to ECR
+name: Build and Push Docker Image to ECR (Develop)
 
 on:
   push:
@@ -11,9 +11,22 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout source code
+      # 1️⃣ Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v4
 
+      # 2️⃣ DEBUG — show repo structure (SAFE)
+      - name: Debug repo structure
+        run: |
+          echo "Repo root:"
+          pwd
+          echo "----------------"
+          ls -la
+          echo "----------------"
+          echo "nestjs-simple-backend folder:"
+          ls -la nestjs-simple-backend
+
+      # 3️⃣ Configure AWS credentials
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -21,20 +34,42 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
 
+      # 4️⃣ DEBUG — verify AWS auth (SAFE)
+      - name: Debug AWS identity
+        run: |
+          aws sts get-caller-identity
+
+      # 5️⃣ Login to Amazon ECR
       - name: Login to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v2
 
+      # 6️⃣ DEBUG — construct ECR image name (SAFE)
+      - name: Debug ECR image name
+        run: |
+          ECR_IMAGE="${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/nest-backend:latest"
+          echo "ECR image name constructed (masked by GitHub):"
+          echo "$ECR_IMAGE"
+
+      # 7️⃣ Build Docker image
       - name: Build Docker image
         run: |
-          docker build -t nest-backend:latest ./nestjs-simple-backend
+          docker build \
+            -t nest-backend:latest \
+            ./nestjs-simple-backend
 
+      # 8️⃣ Tag Docker image
       - name: Tag Docker image
         run: |
           ECR_IMAGE="${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/nest-backend:latest"
-          echo "Tagging image as $ECR_IMAGE"
           docker tag nest-backend:latest "$ECR_IMAGE"
 
+      # 9️⃣ Push Docker image to ECR
       - name: Push Docker image to ECR
         run: |
           ECR_IMAGE="${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/nest-backend:latest"
           docker push "$ECR_IMAGE"
+
+      # 🔟 SUCCESS MESSAGE
+      - name: Done
+        run: |
+          echo "✅ Docker image successfully pushed to ECR"
