@@ -1,28 +1,39 @@
-name: Deploy NestJS Backend to EC2 (Docker + ECR)
+# Workflow name (shown in GitHub Actions UI)
+name: Deploy NestJS Backend to EC2 using Docker & ECR
 
+# When this workflow should run
 on:
+  # Run automatically when code is pushed
   push:
     branches:
       - develop
       - main
+
+  # Allow manual trigger from GitHub UI ("Run workflow" button)
   workflow_dispatch:
 
+# Global environment variables (available in all steps)
 env:
-  AWS_REGION: ap-south-1
-  ECR_REPOSITORY: nest-backend
-  CONTAINER_NAME: nest-backend
-  APP_PORT: 3000
+  AWS_REGION: ap-south-1                # AWS region
+  ECR_REPOSITORY: nest-backend          # ECR repository name
+  CONTAINER_NAME: nest-backend          # Docker container name on EC2
+  APP_PORT: 3000                        # Port exposed by NestJS app
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest              # GitHub-hosted runner
 
     steps:
-      # 1️⃣ Checkout repository
-      - name: Checkout code
+      # ----------------------------------------------------
+      # STEP 1: Checkout source code from GitHub
+      # ----------------------------------------------------
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2️⃣ Configure AWS credentials
+      # ----------------------------------------------------
+      # STEP 2: Configure AWS credentials
+      # This allows GitHub Actions to talk to AWS (ECR)
+      # ----------------------------------------------------
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -30,42 +41,62 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      # 3️⃣ Login to Amazon ECR
+      # ----------------------------------------------------
+      # STEP 3: Login to Amazon ECR
+      # This is equivalent to:
+      # aws ecr get-login-password | docker login ...
+      # ----------------------------------------------------
       - name: Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      # 4️⃣ Build & push Docker image (IMMUTABLE TAG)
+      # ----------------------------------------------------
+      # STEP 4: Build Docker image & push to ECR
+      # - Uses commit SHA as image tag (immutable)
+      # - Uses correct Dockerfile path
+      # ----------------------------------------------------
       - name: Build and push Docker image
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          IMAGE_TAG: ${{ github.sha }}
+          IMAGE_TAG: ${{ github.sha }}   # Commit SHA
         run: |
           echo "Building Docker image with tag: $IMAGE_TAG"
 
+          # Build image
           docker build \
             -f nestjs-simple-backend/Dockerfile \
             -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
             nestjs-simple-backend
 
+          # Push image to ECR
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
 
+          # Save IMAGE_TAG for next steps
           echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
 
-      # 5️⃣ Deploy to EC2
+      # ----------------------------------------------------
+      # STEP 5: SSH into EC2 and deploy container
+      # ----------------------------------------------------
       - name: Deploy to EC2
         uses: appleboy/ssh-action@v1.0.0
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           IMAGE_TAG: ${{ env.IMAGE_TAG }}
+          ECR_REPOSITORY: nest-backend
+          CONTAINER_NAME: nest-backend
+          APP_PORT: 3000
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ubuntu
           key: ${{ secrets.EC2_SSH_KEY }}
+
+          # IMPORTANT: Explicitly pass env vars into SSH session
+          envs: IMAGE_TAG,ECR_REGISTRY,ECR_REPOSITORY,CONTAINER_NAME,APP_PORT
+
           script: |
             set -e
 
-            echo "Pulling image: $IMAGE_TAG"
+            echo "Pulling new image from ECR"
             docker pull $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
 
             echo "Stopping old container (if exists)"
