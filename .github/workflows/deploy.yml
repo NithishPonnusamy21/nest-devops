@@ -3,7 +3,9 @@ name: Deploy Nest Backend to EC2 (Docker + ECR)
 on:
   push:
     branches:
-      - main   # change if needed
+      - main
+      - develop
+  workflow_dispatch:
 
 env:
   AWS_REGION: ap-south-1
@@ -16,7 +18,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1️⃣ Checkout code
+      # 1️⃣ Checkout source code
       - name: Checkout repository
         uses: actions/checkout@v4
 
@@ -33,20 +35,20 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      # 4️⃣ Build, tag, and push image
+      # 4️⃣ Build & push Docker image (immutable tag)
       - name: Build and push Docker image
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           IMAGE_TAG: ${{ github.sha }}
         run: |
-          echo "Building image with tag: $IMAGE_TAG"
+          echo "Building Docker image with tag: $IMAGE_TAG"
 
           docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
 
           echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
 
-      # 5️⃣ Deploy to EC2 via SSH
+      # 5️⃣ Deploy to EC2
       - name: Deploy to EC2
         uses: appleboy/ssh-action@v1.0.0
         env:
@@ -59,7 +61,7 @@ jobs:
           script: |
             set -e
 
-            echo "Pulling new image"
+            echo "Pulling image $IMAGE_TAG"
             docker pull $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
 
             echo "Stopping old container (if exists)"
@@ -74,4 +76,4 @@ jobs:
               --env-file /home/ubuntu/.env \
               $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
 
-            echo "Deployment successful"
+            echo "Deployment completed successfully"
